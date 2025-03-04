@@ -1,4 +1,3 @@
-# frontend/app.py
 import streamlit as st
 import requests
 import pandas as pd
@@ -7,22 +6,75 @@ import seaborn as sns
 from datetime import datetime
 
 # Backend API URL
-API_URL = "https://daily-step-tracker-backend.onrender.com"
+API_URL = "http://127.0.0.1:5000"
 
 # Title of the app
 st.title("Daily Step Tracker Dashboard")
 
+# User session state
+if 'user_id' not in st.session_state:
+    st.session_state['user_id'] = None
+
 # Sidebar for navigation
 st.sidebar.title("Navigation")
-options = st.sidebar.radio("Choose an option", ["Upload Data", "View Data", "Visualizations", "Predictions"])
+if st.session_state['user_id'] is None:
+    options = st.sidebar.radio("Choose an option", ["Login", "Register"])
+else:
+    options = st.sidebar.radio("Choose an option", ["Upload Data", "View Data", "Visualizations", "Predictions", "Logout"])
+
+# User registration
+if options == "Register":
+    st.header("User Registration")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Register"):
+        response = requests.post(f"{API_URL}/register", json={"username": username, "password": password})
+        if response.status_code == 200:
+            st.success("User registered successfully!")
+        else:
+            st.error(response.json()["message"])
+
+# User login
+elif options == "Login":
+    st.header("User Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        response = requests.post(f"{API_URL}/login", json={"username": username, "password": password})
+        if response.status_code == 200:
+            st.session_state['user_id'] = response.json()["user_id"]
+            st.success("Login successful!")
+            # Update the UI to show the main dashboard
+            st.session_state['show_dashboard'] = True
+        else:
+            st.error("Invalid username or password!")
+
+    # Redirect to the main dashboard after successful login
+    if st.session_state.get('show_dashboard'):
+        st.session_state['show_dashboard'] = False  # Reset the flag
+        options = "Upload Data"  # Redirect to the main dashboard
+
+# Logout
+elif options == "Logout":
+    st.session_state['user_id'] = None
+    st.success("Logged out successfully!")
+    # Redirect to the login page after logout
+    options = "Login"  # Redirect to the login page
 
 # Upload step count data
-if options == "Upload Data":
+elif options == "Upload Data":
     st.header("Upload Step Count Data")
     date = st.date_input("Date")
     step_count = st.number_input("Step Count", min_value=0)
     if st.button("Upload"):
-        response = requests.post(f"{API_URL}/upload", json={"date": str(date), "step_count": step_count})
+        response = requests.post(
+            f"{API_URL}/upload",
+            json={
+                "user_id": st.session_state['user_id'],
+                "date": str(date),
+                "step_count": step_count
+            }
+        )
         if response.status_code == 200:
             st.success("Data uploaded successfully!")
         else:
@@ -32,10 +84,12 @@ if options == "Upload Data":
 elif options == "View Data":
     st.header("Historical Data")
     if st.button("Fetch Data"):
-        response = requests.get(f"{API_URL}/data")
+        response = requests.get(f"{API_URL}/data", params={"user_id": st.session_state['user_id']})
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data)
+            # Select only 'date' and 'step_count' columns
+            df = df[['date', 'step_count']]
             st.write(df)
         else:
             st.error("Failed to fetch data.")
@@ -45,7 +99,7 @@ elif options == "Visualizations":
     st.header("Data Visualizations")
 
     # Fetch data from the backend
-    response = requests.get(f"{API_URL}/data")
+    response = requests.get(f"{API_URL}/data", params={"user_id": st.session_state['user_id']})
     if response.status_code == 200:
         data = response.json()
         df = pd.DataFrame(data)
@@ -113,14 +167,14 @@ elif options == "Predictions":
 
     if st.button("Generate Predictions and Recommendations"):
         # Fetch historical data
-        response = requests.get(f"{API_URL}/data")
+        response = requests.get(f"{API_URL}/data", params={"user_id": st.session_state['user_id']})
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data)
             df['date'] = pd.to_datetime(df['date'])  # Convert 'date' column to datetime
 
             # Generate predictions
-            response = requests.get(f"{API_URL}/predict")
+            response = requests.get(f"{API_URL}/predict", params={"user_id": st.session_state['user_id']})
             if response.status_code == 200:
                 predictions = response.json()["predictions"]
                 st.write("Predicted Step Counts for the Next 7 Days:")
