@@ -7,7 +7,7 @@ import seaborn as sns
 from datetime import datetime
 
 # Backend API URL
-API_URL = "http://127.0.0.1:5000"
+API_URL = "https://daily-step-tracker-backend.onrender.com"
 
 # Title of the app
 st.title("Daily Step Tracker Dashboard")
